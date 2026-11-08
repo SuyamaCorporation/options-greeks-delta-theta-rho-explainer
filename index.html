@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>オプション・ギリシャ文字インタラクティブ解説ツール</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+canvas { display: block; }
+</style>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+<div class="max-w-5xl mx-auto p-4">
+  <h1 class="text-2xl font-bold mb-1">オプション・ギリシャ文字インタラクティブ解説</h1>
+  <p class="text-gray-400 text-sm mb-5">Black-Scholesモデルでグリーク（Δデルタ・Γガンマ・Θシータ・Νベガ・Ρロー）をリアルタイム計算します。</p>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+    <div class="bg-gray-900 rounded-xl p-4 space-y-4">
+      <h2 class="font-semibold text-gray-300">パラメーター設定</h2>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">原資産価格 (S) <span id="sv" class="text-white font-bold">100</span></label>
+        <input id="S" type="range" min="50" max="200" value="100" step="1" class="w-full accent-blue-500" aria-label="原資産価格">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">行使価格 (K) <span id="kv" class="text-white font-bold">100</span></label>
+        <input id="K" type="range" min="50" max="200" value="100" step="1" class="w-full accent-purple-500" aria-label="行使価格">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">残存日数 (T) <span id="tv" class="text-white font-bold">30</span>日</label>
+        <input id="T" type="range" min="1" max="365" value="30" step="1" class="w-full accent-green-500" aria-label="残存日数">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">ボラティリティ (σ) <span id="vv" class="text-white font-bold">20</span>%</label>
+        <input id="V" type="range" min="1" max="100" value="20" step="1" class="w-full accent-yellow-500" aria-label="ボラティリティ">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">リスクフリーレート (r) <span id="rv" class="text-white font-bold">1.0</span>%</label>
+        <input id="R" type="range" min="0" max="10" value="1" step="0.1" class="w-full accent-red-500" aria-label="リスクフリーレート">
+      </div>
+    </div>
+
+    <div class="lg:col-span-2 bg-gray-900 rounded-xl p-4">
+      <div class="flex gap-3 mb-3">
+        <button id="showCall" class="flex-1 py-1.5 rounded-lg text-sm font-semibold bg-blue-700 text-white" aria-label="コール表示">コール（買う権利）</button>
+        <button id="showPut" class="flex-1 py-1.5 rounded-lg text-sm font-semibold bg-gray-700 text-gray-300 hover:bg-gray-600" aria-label="プット表示">プット（売る権利）</button>
+        <button id="showBoth" class="flex-1 py-1.5 rounded-lg text-sm font-semibold bg-gray-700 text-gray-300 hover:bg-gray-600" aria-label="両方表示">比較</button>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+        <div class="bg-gray-800 rounded-lg p-3 text-center">
+          <div class="text-xs text-gray-400 mb-1">オプション価格</div>
+          <div id="price" class="text-xl font-bold text-white"></div>
+        </div>
+        <div class="bg-blue-900 rounded-lg p-3 text-center cursor-pointer hover:bg-blue-800" onclick="showInfo('delta')">
+          <div class="text-xs text-gray-300 mb-1">Δ デルタ</div>
+          <div id="delta" class="text-xl font-bold text-blue-300"></div>
+        </div>
+        <div class="bg-purple-900 rounded-lg p-3 text-center cursor-pointer hover:bg-purple-800" onclick="showInfo('gamma')">
+          <div class="text-xs text-gray-300 mb-1">Γ ガンマ</div>
+          <div id="gamma" class="text-xl font-bold text-purple-300"></div>
+        </div>
+        <div class="bg-red-900 rounded-lg p-3 text-center cursor-pointer hover:bg-red-800" onclick="showInfo('theta')">
+          <div class="text-xs text-gray-300 mb-1">Θ シータ</div>
+          <div id="theta" class="text-xl font-bold text-red-300"></div>
+        </div>
+        <div class="bg-yellow-900 rounded-lg p-3 text-center cursor-pointer hover:bg-yellow-800" onclick="showInfo('vega')">
+          <div class="text-xs text-gray-300 mb-1">ν ベガ</div>
+          <div id="vega" class="text-xl font-bold text-yellow-300"></div>
+        </div>
+        <div class="bg-green-900 rounded-lg p-3 text-center cursor-pointer hover:bg-green-800" onclick="showInfo('rho')">
+          <div class="text-xs text-gray-300 mb-1">ρ ロー</div>
+          <div id="rho" class="text-xl font-bold text-green-300"></div>
+        </div>
+      </div>
+
+      <div id="infoBox" class="bg-gray-800 rounded-lg p-3 text-sm text-gray-300 min-h-12 mb-3"></div>
+
+      <canvas id="chart" height="150" class="rounded-lg bg-gray-800 w-full"></canvas>
+      <div id="chartLabel" class="text-xs text-gray-500 text-center mt-1">デルタ vs 原資産価格</div>
+    </div>
+  </div>
+
+  <div class="bg-gray-900 rounded-xl p-4">
+    <h2 class="font-semibold text-gray-300 mb-3">コール vs プット 比較表</h2>
+    <div id="compareTable" class="overflow-x-auto"></div>
+  </div>
+</div>
+
+<script>
+function norm(x) {
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x) / Math.sqrt(2);
+  const t = 1/(1 + p*x);
+  const y = 1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return 0.5*(1+sign*y);
+}
+function normpdf(x) { return Math.exp(-0.5*x*x)/Math.sqrt(2*Math.PI); }
+
+function bs(S, K, T, sigma, r, isCall) {
+  if (T <= 0) {
+    const intrinsic = isCall ? Math.max(S-K,0) : Math.max(K-S,0);
+    return { price:intrinsic, delta:isCall?(S>K?1:0):(S<K?-1:0), gamma:0, theta:0, vega:0, rho:0 };
+  }
+  const d1 = (Math.log(S/K) + (r + 0.5*sigma*sigma)*T) / (sigma*Math.sqrt(T));
+  const d2 = d1 - sigma*Math.sqrt(T);
+  const price = isCall
+    ? S*norm(d1) - K*Math.exp(-r*T)*norm(d2)
+    : K*Math.exp(-r*T)*norm(-d2) - S*norm(-d1);
+  const delta = isCall ? norm(d1) : norm(d1)-1;
+  const gamma = normpdf(d1)/(S*sigma*Math.sqrt(T));
+  const theta = isCall
+    ? (-(S*normpdf(d1)*sigma)/(2*Math.sqrt(T)) - r*K*Math.exp(-r*T)*norm(d2))/365
+    : (-(S*normpdf(d1)*sigma)/(2*Math.sqrt(T)) + r*K*Math.exp(-r*T)*norm(-d2))/365;
+  const vega = S*normpdf(d1)*Math.sqrt(T)/100;
+  const rho = isCall ? K*T*Math.exp(-r*T)*norm(d2)/100 : -K*T*Math.exp(-r*T)*norm(-d2)/100;
+  return { price, delta, gamma, theta, vega, rho };
+}
+
+const infos = {
+  delta: 'Δ デルタ: 原資産価格が1単位変化した時のオプション価格の変化量。コールは0〜+1、プットは-1〜0。ATM（原資産=行使価格）では約±0.5。ヘッジ比率としても使用。',
+  gamma: 'Γ ガンマ: デルタの変化率（原資産価格に対するデルタの二次微分）。ATM付近で最大。ガンマが大きいほどデルタが急速に変化する。',
+  theta: 'Θ シータ: 1日経過によるオプション価格の減少量（タイムディケイ）。通常マイナス（時間価値の消耗）。満期が近づくほどATMのシータは大きくなる。',
+  vega:  'ν ベガ: ボラティリティが1%変化した時のオプション価格の変化量。コール・プット共にプラス。ボラが高いほど不確実性が大きくオプション価値が増加。',
+  rho:   'ρ ロー: リスクフリーレートが1%変化した時のオプション価格の変化量。コールはプラス（金利上昇で増加）、プットはマイナス（金利上昇で減少）。'
+};
+
+let mode = 'call';
+let chartMetric = 'delta';
+
+function fmt(v, digits=4) { return isNaN(v) ? '-' : v.toFixed(digits); }
+
+function recalc() {
+  const S = Number(document.getElementById('S').value);
+  const K = Number(document.getElementById('K').value);
+  const T = Number(document.getElementById('T').value)/365;
+  const sigma = Number(document.getElementById('V').value)/100;
+  const r = Number(document.getElementById('R').value)/100;
+
+  document.getElementById('sv').textContent = S;
+  document.getElementById('kv').textContent = K;
+  document.getElementById('tv').textContent = document.getElementById('T').value;
+  document.getElementById('vv').textContent = document.getElementById('V').value;
+  document.getElementById('rv').textContent = Number(document.getElementById('R').value).toFixed(1);
+
+  const isCall = mode !== 'put';
+  const g = bs(S, K, T, sigma, r, isCall);
+  document.getElementById('price').textContent = fmt(g.price, 2);
+  document.getElementById('delta').textContent = fmt(g.delta, 4);
+  document.getElementById('gamma').textContent = fmt(g.gamma, 5);
+  document.getElementById('theta').textContent = fmt(g.theta, 4);
+  document.getElementById('vega').textContent = fmt(g.vega, 4);
+  document.getElementById('rho').textContent = fmt(g.rho, 4);
+
+  renderChart(S, K, T, sigma, r);
+  renderCompare(S, K, T, sigma, r);
+}
+
+function showInfo(metric) {
+  chartMetric = metric;
+  document.getElementById('infoBox').textContent = infos[metric] || '';
+  recalc();
+}
+
+function renderChart(S, K, T, sigma, r) {
+  const canvas = document.getElementById('chart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.clientWidth || 400;
+  canvas.width = W;
+  canvas.height = 150;
+  ctx.clearRect(0, 0, W, 150);
+
+  const prices = [];
+  for (let i = 0; i <= 100; i++) { prices.push(50 + i * 1.5); }
+
+  const extractMetric = (g) => {
+    const m = { delta:g.delta, gamma:g.gamma, theta:g.theta, vega:g.vega, rho:g.rho };
+    return m[chartMetric] ?? g.delta;
+  };
+
+  const callVals = prices.map(p => extractMetric(bs(p, K, T, sigma, r, true)));
+  const putVals = prices.map(p => extractMetric(bs(p, K, T, sigma, r, false)));
+  const vals = [...callVals, ...putVals];
+  const minV = Math.min(...vals);
+  const maxV = Math.max(...vals);
+  const range = maxV - minV || 1;
+
+  const toY = v => 10 + (1-(v-minV)/range)*130;
+  const toX = i => (i/100)*W;
+
+  ctx.strokeStyle = '#374151';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = 10 + i*32.5;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+
+  const drawLine = (vals, color) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath();
+    vals.forEach((v,i) => { i===0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)); });
+    ctx.stroke();
+  };
+
+  if (mode === 'call' || mode === 'both') drawLine(callVals, '#60a5fa');
+  if (mode === 'put' || mode === 'both') drawLine(putVals, '#f87171');
+
+  const kX = toX((K-50)/1.5);
+  ctx.strokeStyle = '#a78bfa'; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(kX, 0); ctx.lineTo(kX, 150); ctx.stroke();
+  ctx.setLineDash([]);
+
+  document.getElementById('chartLabel').textContent = `${chartMetric.charAt(0).toUpperCase()+chartMetric.slice(1)} vs 原資産価格（青=コール、赤=プット、紫破線=行使価格）`;
+}
+
+function renderCompare(S, K, T, sigma, r) {
+  const c = bs(S, K, T, sigma, r, true);
+  const p = bs(S, K, T, sigma, r, false);
+  const rows = [
+    ['オプション価格', fmt(c.price,2), fmt(p.price,2)],
+    ['Δ デルタ', fmt(c.delta,4), fmt(p.delta,4)],
+    ['Γ ガンマ', fmt(c.gamma,5), fmt(p.gamma,5)],
+    ['Θ シータ', fmt(c.theta,4), fmt(p.theta,4)],
+    ['ν ベガ', fmt(c.vega,4), fmt(p.vega,4)],
+    ['ρ ロー', fmt(c.rho,4), fmt(p.rho,4)]
+  ];
+  document.getElementById('compareTable').innerHTML = `
+    <table class="w-full text-sm border-collapse">
+      <thead><tr>
+        <th class="bg-gray-800 text-gray-300 px-3 py-2 text-left rounded-tl-lg">グリーク</th>
+        <th class="bg-blue-900 text-blue-200 px-3 py-2 text-center">コール</th>
+        <th class="bg-red-900 text-red-200 px-3 py-2 text-center rounded-tr-lg">プット</th>
+      </tr></thead>
+      <tbody>${rows.map(([n,c,p]) => `<tr class="border-t border-gray-700">
+        <td class="px-3 py-2 text-gray-300">${n}</td>
+        <td class="px-3 py-2 text-center text-blue-300 font-mono">${c}</td>
+        <td class="px-3 py-2 text-center text-red-300 font-mono">${p}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+['S','K','T','V','R'].forEach(id => document.getElementById(id).addEventListener('input', recalc));
+
+['showCall','showPut','showBoth'].forEach(id => {
+  document.getElementById(id).addEventListener('click', () => {
+    mode = id==='showCall'?'call':id==='showPut'?'put':'both';
+    ['showCall','showPut','showBoth'].forEach(b => {
+      const btn = document.getElementById(b);
+      btn.className = b===id ? 'flex-1 py-1.5 rounded-lg text-sm font-semibold bg-blue-700 text-white' : 'flex-1 py-1.5 rounded-lg text-sm font-semibold bg-gray-700 text-gray-300 hover:bg-gray-600';
+    });
+    recalc();
+  });
+});
+
+showInfo('delta');
+recalc();
+</script>
+</body>
+</html>
